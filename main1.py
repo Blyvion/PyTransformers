@@ -17,23 +17,6 @@ from transformers import AutoTokenizer
 # In[ ]:
 
 
-ds = load_dataset("Yelp/yelp_review_full")
-ds
-
-
-# In[ ]:
-
-
-tokenizer = AutoTokenizer.from_pretrained('bert-base-uncased')
-def mytokenizer(batch):
-	data = tokenizer(batch['text'], padding='max_length', truncation=True, max_length=128)
-	return {'input_ids': data['input_ids'], 'mask': data['attention_mask']}
-ds = ds.map(mytokenizer, batched=True)
-
-
-# In[ ]:
-
-
 BATCH_SIZE = 32
 MAX_SEQ_LEN = 128
 NUM_EPOCHS = 10
@@ -100,12 +83,12 @@ def collate_fn(batch):
 # In[ ]:
 
 
-# ds = load_dataset("Yelp/yelp_review_full")
+ds = load_dataset("Yelp/yelp_review_full")
 
 # # train_dataset = YelpDataset(ds['train'])
 # # test_dataset = YelpDataset(ds['test'])
-train_dataloader = DataLoader(ds['train'], batch_size=BATCH_SIZE, shuffle=True)
-test_dataloader = DataLoader(ds['test'], batch_size=BATCH_SIZE, shuffle=True)
+train_dataloader = DataLoader(ds['train'], batch_size=BATCH_SIZE, shuffle=True, collate_fn=collate_fn)
+test_dataloader = DataLoader(ds['test'], batch_size=BATCH_SIZE, shuffle=True, collate_fn=collate_fn)
 
 
 # ### Encoder Only Transformer
@@ -195,9 +178,8 @@ for epoch in range(NUM_EPOCHS):
 	running_loss = 0.0
 	with tqdm(total=len(train_dataloader), desc=f'Epoch {epoch+1}/{NUM_EPOCHS}', unit='batch', ncols=100) as pbar:
 		for batch in train_dataloader:
-			input_ids = torch.stack(batch['input_ids'], dim=1).to(device)
-			mask = torch.stack(batch['mask'], dim=1).to(device)
-			mask = torch.log(mask)
+			input_ids = batch['input_ids'].to(device)
+			mask = batch['attention_mask'].to(device)
 			label = batch['label'].to(device)
 
 			optimizer.zero_grad()
@@ -214,10 +196,4 @@ for epoch in range(NUM_EPOCHS):
 	#print(f'\r {running_loss/len(dataloader)}', end='', flush=True)
 
 print('\nFinished Training')
-
-
-# In[ ]:
-
-
-
 

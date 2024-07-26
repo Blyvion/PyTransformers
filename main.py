@@ -11,7 +11,7 @@ import numpy as np
 from tqdm import tqdm
 from datasets import load_dataset
 from torch.utils.data import DataLoader, Dataset
-from transformers import BertTokenizerFast
+from transformers import AutoTokenizer
 
 
 # In[ ]:
@@ -22,7 +22,7 @@ MAX_SEQ_LEN = 128
 NUM_EPOCHS = 10
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-tokenizer = BertTokenizerFast.from_pretrained("google-bert/bert-base-uncased")
+tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
 
 
 # ### Data
@@ -45,12 +45,12 @@ class YelpDataset(Dataset):
 
 		return [text, int(label)]
 	
-def collate_fn(batch):
+def collate_fn_bad(batch):
 	batch = np.asarray(batch)
 
 	text = batch[:, 0]
 	labels = batch[:, 1].astype(int)
-
+	
 	inputs = tokenizer(text.tolist(),
 						  padding = "max_length",
 						  truncation = True,
@@ -59,9 +59,25 @@ def collate_fn(batch):
 		
 	input_ids = inputs['input_ids'].squeeze()
 	attention_mask = inputs['attention_mask'].squeeze() # mask pads.
-	attention_mask = torch.where(attention_mask == 1, torch.tensor(0.0), torch.tensor(float('-inf')))
+	attention_mask = torch.log(attention_mask)
 
 	return {'input_ids': input_ids, 'attention_mask': attention_mask, 'label': torch.from_numpy(labels)}
+
+def collate_fn(batch):
+	text = [record['text'] for record in batch]
+	label = [record['label'] for record in batch]
+
+	inputs = tokenizer(text,
+						  padding = "max_length",
+						  truncation = True,
+						  max_length = MAX_SEQ_LEN,
+						  return_tensors = "pt")
+	
+	input_ids = inputs['input_ids'].squeeze()
+	attention_mask = inputs['attention_mask'].squeeze() # mask pads.
+	attention_mask = torch.log(attention_mask)
+
+	return {'input_ids': input_ids, 'attention_mask': attention_mask, 'label': torch.tensor(label)}
 
 
 # In[ ]:
@@ -69,10 +85,10 @@ def collate_fn(batch):
 
 ds = load_dataset("Yelp/yelp_review_full")
 
-train_dataset = YelpDataset(ds['train'])
-test_dataset = YelpDataset(ds['test'])
-train_dataloader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, collate_fn=collate_fn)
-test_dataloader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=True, collate_fn=collate_fn)
+# # train_dataset = YelpDataset(ds['train'])
+# # test_dataset = YelpDataset(ds['test'])
+train_dataloader = DataLoader(ds['train'], batch_size=BATCH_SIZE, shuffle=True, collate_fn=collate_fn)
+test_dataloader = DataLoader(ds['test'], batch_size=BATCH_SIZE, shuffle=True, collate_fn=collate_fn)
 
 
 # ### Encoder Only Transformer

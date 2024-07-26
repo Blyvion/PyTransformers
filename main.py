@@ -7,6 +7,7 @@
 import torch
 import torch.nn as nn
 import math
+import numpy as np
 from tqdm import tqdm
 from datasets import load_dataset
 from torch.utils.data import DataLoader, Dataset
@@ -19,7 +20,9 @@ from transformers import BertTokenizer
 BATCH_SIZE = 2
 MAX_SEQ_LEN = 256
 NUM_EPOCHS = 10
+
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+tokenizer = BertTokenizer.from_pretrained("google-bert/bert-base-uncased")
 
 
 # ### Data
@@ -28,10 +31,10 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
 class YelpDataset(Dataset):
-	def __init__(self, data, tokenizer, max_length = None):
+	def __init__(self, data, max_length = MAX_SEQ_LEN):
 		self.data = data
 		self.tokenizer = tokenizer
-		self.max_length = 512
+		self.max_length = max_length
 
 	def __len__(self):
 		return self.data.num_rows
@@ -40,29 +43,36 @@ class YelpDataset(Dataset):
 		text = self.data['text'][idx]
 		label = self.data['label'][idx]
 
-		inputs = self.tokenizer(text,
+		return [text, int(label)]
+	
+def collate_fn(batch):
+	batch = np.asarray(batch)
+
+	text = batch[:, 0]
+	labels = batch[:, 1].astype(int)
+
+	inputs = tokenizer(text.tolist(),
 						  padding = "max_length",
 						  truncation = True,
-						  max_length = self.max_length,
+						  max_length = MAX_SEQ_LEN,
 						  return_tensors = "pt")
 		
-		input_ids = inputs['input_ids'].squeeze()
-		attention_mask = inputs['attention_mask'].squeeze() # mask pads.
-		attention_mask = torch.where(attention_mask == 1, torch.tensor(0.0), torch.tensor(float('-inf')))
-		
-		return {"input_ids": input_ids, "attention_mask": attention_mask}, label
+	input_ids = inputs['input_ids'].squeeze()
+	attention_mask = inputs['attention_mask'].squeeze() # mask pads.
+	attention_mask = torch.where(attention_mask == 1, torch.tensor(0.0), torch.tensor(float('-inf')))
+
+	return {'input_ids': input_ids, 'attention_mask': attention_mask, 'label': torch.from_numpy(labels)}
 
 
 # In[ ]:
 
 
 ds = load_dataset("Yelp/yelp_review_full")
-tokenizer = BertTokenizer.from_pretrained("google-bert/bert-base-uncased")
 
-train_dataset = YelpDataset(ds['train'], tokenizer)
-test_dataset = YelpDataset(ds['test'], tokenizer)
-train_dataloader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
-test_dataloader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=True)
+train_dataset = YelpDataset(ds['train'])
+test_dataset = YelpDataset(ds['test'])
+train_dataloader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, collate_fn=collate_fn)
+test_dataloader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=True, collate_fn=collate_fn)
 
 
 # ### Encoder Only Transformer
@@ -150,11 +160,11 @@ optimizer = torch.optim.Adam(model.parameters())
 for epoch in range(NUM_EPOCHS):
 
 	running_loss = 0.0
-	with tqdm(total=len(train_dataloader), desc=f'Epoch {epoch+1}/{NUM_EPOCHS}', unit='batch', ncols=100) as pbar:
-		for data, label in train_dataloader:
-			input_ids = data['input_ids'].to(device)
-			mask = data['attention_mask'].to(device)
-			label = label.to(device)
+	with tqdm(total=len(train_dataloader), desc=f'Epoch {epoch+1}/{NUM_EPOCHS}', unit='batch', ncols=50) as pbar:
+		for batch in train_dataloader:
+			input_ids = batch['input_ids'].to(device)
+			mask = batch['attention_mask'].to(device)
+			label = batch['label'].to(device)
 
 			optimizer.zero_grad()
 

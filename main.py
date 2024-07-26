@@ -11,18 +11,18 @@ import numpy as np
 from tqdm import tqdm
 from datasets import load_dataset
 from torch.utils.data import DataLoader, Dataset
-from transformers import BertTokenizer
+from transformers import BertTokenizerFast
 
 
 # In[ ]:
 
 
-BATCH_SIZE = 2
-MAX_SEQ_LEN = 256
+BATCH_SIZE = 32
+MAX_SEQ_LEN = 128
 NUM_EPOCHS = 10
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-tokenizer = BertTokenizer.from_pretrained("google-bert/bert-base-uncased")
+tokenizer = BertTokenizerFast.from_pretrained("google-bert/bert-base-uncased")
 
 
 # ### Data
@@ -160,7 +160,7 @@ optimizer = torch.optim.Adam(model.parameters())
 for epoch in range(NUM_EPOCHS):
 
 	running_loss = 0.0
-	with tqdm(total=len(train_dataloader), desc=f'Epoch {epoch+1}/{NUM_EPOCHS}', unit='batch', ncols=50) as pbar:
+	with tqdm(total=len(train_dataloader), desc=f'Epoch {epoch+1}/{NUM_EPOCHS}', unit='batch', ncols=100) as pbar:
 		for batch in train_dataloader:
 			input_ids = batch['input_ids'].to(device)
 			mask = batch['attention_mask'].to(device)

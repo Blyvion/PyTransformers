@@ -1,8 +1,5 @@
-#!/usr/bin/env python
-# coding: utf-8
-
-# In[ ]:
-
+## code to implement a transformer encoder only classifier
+# TODO: implement eval of accuracy metrics
 
 import torch
 import torch.nn as nn
@@ -13,16 +10,8 @@ from datasets import load_dataset
 from torch.utils.data import DataLoader, Dataset
 from transformers import AutoTokenizer
 
-
-# In[ ]:
-
-
 ds = load_dataset("Yelp/yelp_review_full")
 ds
-
-
-# In[ ]:
-
 
 tokenizer = AutoTokenizer.from_pretrained('bert-base-uncased')
 def mytokenizer(batch):
@@ -30,22 +19,12 @@ def mytokenizer(batch):
 	return {'input_ids': data['input_ids'], 'mask': data['attention_mask']}
 ds = ds.map(mytokenizer, batched=True)
 
-
-# In[ ]:
-
-
 BATCH_SIZE = 32
 MAX_SEQ_LEN = 128
 NUM_EPOCHS = 10
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
-
-
-# ### Data
-
-# In[ ]:
-
 
 class YelpDataset(Dataset):
 	def __init__(self, data, max_length = MAX_SEQ_LEN):
@@ -96,22 +75,12 @@ def collate_fn(batch):
 
 	return {'input_ids': input_ids, 'attention_mask': attention_mask, 'label': torch.tensor(label)}
 
-
-# In[ ]:
-
-
 # ds = load_dataset("Yelp/yelp_review_full")
 
 # # train_dataset = YelpDataset(ds['train'])
 # # test_dataset = YelpDataset(ds['test'])
 train_dataloader = DataLoader(ds['train'], batch_size=BATCH_SIZE, shuffle=True)
 test_dataloader = DataLoader(ds['test'], batch_size=BATCH_SIZE, shuffle=True)
-
-
-# ### Encoder Only Transformer
-
-# In[ ]:
-
 
 class PositionalEncoding(nn.Module):
     def __init__(self, d_model, max_len=512):
@@ -143,10 +112,6 @@ class PositionalEncoding(nn.Module):
         x = x + self.pe[:, :x.size(1), :]
         return x
 
-
-# In[ ]:
-
-
 class Classifier(nn.Module):
 	def __init__(self, word_embed_size = 800, att_heads = 10, ff_dim = 2048, enc_stack = 8):
 		super(Classifier, self).__init__()
@@ -176,19 +141,9 @@ class Classifier(nn.Module):
 
 		return out
 
-
-# ### Training
-
-# In[ ]:
-
-
 model = Classifier().to(device)
 loss_fn = torch.nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(model.parameters())
-
-
-# In[ ]:
-
 
 for epoch in range(NUM_EPOCHS):
 
@@ -214,10 +169,4 @@ for epoch in range(NUM_EPOCHS):
 	#print(f'\r {running_loss/len(dataloader)}', end='', flush=True)
 
 print('\nFinished Training')
-
-
-# In[ ]:
-
-
-
 

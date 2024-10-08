@@ -79,8 +79,8 @@ def collate_fn(batch):
 
 # # train_dataset = YelpDataset(ds['train'])
 # # test_dataset = YelpDataset(ds['test'])
-train_dataloader = DataLoader(ds['train'], batch_size=BATCH_SIZE, shuffle=True)
-test_dataloader = DataLoader(ds['test'], batch_size=BATCH_SIZE, shuffle=True)
+train_dataloader = DataLoader(ds['train'].shard(10,2), batch_size=BATCH_SIZE, shuffle=True)
+test_dataloader = DataLoader(ds['test'].shard(10,2), batch_size=BATCH_SIZE, shuffle=True)
 
 class PositionalEncoding(nn.Module):
     def __init__(self, d_model, max_len=512):
@@ -148,6 +148,8 @@ optimizer = torch.optim.Adam(model.parameters())
 for epoch in range(NUM_EPOCHS):
 
 	running_loss = 0.0
+	running_correct = 0.0
+	running_total = 0
 	with tqdm(total=len(train_dataloader), desc=f'Epoch {epoch+1}/{NUM_EPOCHS}', unit='batch', ncols=100) as pbar:
 		for batch in train_dataloader:
 			input_ids = torch.stack(batch['input_ids'], dim=1).to(device)
@@ -162,8 +164,14 @@ for epoch in range(NUM_EPOCHS):
 			loss.backward()
 			optimizer.step()
 
+			_, topidx = outputs.topk(1, dim=-1)
+			topidx = topidx.flatten()
+			correct = (topidx == label).sum().item()
+			running_correct += correct
+			running_total += len(label)
+
 			running_loss += loss.item()
-			pbar.set_postfix(loss=f'{running_loss/len(train_dataloader):.4f}')
+			pbar.set_postfix(acc=f'{running_correct/running_total:.4f}', loss=f'{running_loss/len(train_dataloader):.4f}')
 			pbar.update(1)
 	
 	#print(f'\r {running_loss/len(dataloader)}', end='', flush=True)

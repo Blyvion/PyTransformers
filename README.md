@@ -1,11 +1,9 @@
 # PyTransformers
 Project to explore the usage of Pytorchs Transformer layer.    
 
-#### Encoder only    
-Implement a transformer encoder only classification model.    
+### Classifier
+Sentiment analysis on yelp dataset.
 
-#### Decoder only    
-Implement a causal language model.    
 
-#### Translation task    
-Implement a encoder decoder arichtecture for question answering or translation task.
+### Causal Language Model
+CLM on wikipedia dataset.

@@ -1,5 +1,8 @@
-## code to implement a transformer encoder only classifier
-# TODO: implement eval of accuracy metrics
+#!/usr/bin/env python
+# coding: utf-8
+
+# In[1]:
+
 
 import torch
 import torch.nn as nn
@@ -9,15 +12,28 @@ from tqdm import tqdm
 from datasets import load_dataset
 from torch.utils.data import DataLoader, Dataset
 from transformers import AutoTokenizer
+from sklearn.metrics import accuracy_score
+
+
+# In[2]:
+
 
 ds = load_dataset("Yelp/yelp_review_full")
 ds
 
-tokenizer = AutoTokenizer.from_pretrained('bert-base-uncased')
-def mytokenizer(batch):
-	data = tokenizer(batch['text'], padding='max_length', truncation=True, max_length=128)
-	return {'input_ids': data['input_ids'], 'mask': data['attention_mask']}
-ds = ds.map(mytokenizer, batched=True)
+
+# In[3]:
+
+
+# tokenizer = AutoTokenizer.from_pretrained('bert-base-uncased')
+# def mytokenizer(batch):
+# 	data = tokenizer(batch['text'], padding='max_length', truncation=True, max_length=128)
+# 	return {'input_ids': data['input_ids'], 'mask': data['attention_mask']}
+# ds = ds.map(mytokenizer, batched=True)
+
+
+# In[4]:
+
 
 BATCH_SIZE = 32
 MAX_SEQ_LEN = 128
@@ -25,6 +41,12 @@ NUM_EPOCHS = 10
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
+
+
+# ### Data
+
+# In[5]:
+
 
 class YelpDataset(Dataset):
 	def __init__(self, data, max_length = MAX_SEQ_LEN):
@@ -75,12 +97,22 @@ def collate_fn(batch):
 
 	return {'input_ids': input_ids, 'attention_mask': attention_mask, 'label': torch.tensor(label)}
 
+
+# In[6]:
+
+
 # ds = load_dataset("Yelp/yelp_review_full")
 
 # # train_dataset = YelpDataset(ds['train'])
 # # test_dataset = YelpDataset(ds['test'])
-train_dataloader = DataLoader(ds['train'].shard(10,2), batch_size=BATCH_SIZE, shuffle=True)
-test_dataloader = DataLoader(ds['test'].shard(10,2), batch_size=BATCH_SIZE, shuffle=True)
+train_dataloader = DataLoader(ds['train'].shard(1000, 0), batch_size=BATCH_SIZE, shuffle=True, collate_fn=collate_fn)
+test_dataloader = DataLoader(ds['test'].shard(1000, 0), batch_size=BATCH_SIZE, shuffle=True, collate_fn=collate_fn)
+
+
+# ### Encoder Only Transformer
+
+# In[7]:
+
 
 class PositionalEncoding(nn.Module):
     def __init__(self, d_model, max_len=512):
@@ -141,20 +173,33 @@ class Classifier(nn.Module):
 
 		return out
 
+
+# ### Training
+
+# In[12]:
+
+
 model = Classifier().to(device)
 loss_fn = torch.nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(model.parameters())
 
+
+# In[13]:
+
+
+losses = list()
+accuracy = list()
+
 for epoch in range(NUM_EPOCHS):
 
-	running_loss = 0.0
-	running_correct = 0.0
-	running_total = 0
 	with tqdm(total=len(train_dataloader), desc=f'Epoch {epoch+1}/{NUM_EPOCHS}', unit='batch', ncols=100) as pbar:
-		for batch in train_dataloader:
-			input_ids = torch.stack(batch['input_ids'], dim=1).to(device)
-			mask = torch.stack(batch['mask'], dim=1).to(device)
-			mask = torch.log(mask)
+
+		running_loss = 0.0
+		running_acc = 0.0
+
+		for i, batch in enumerate(train_dataloader):
+			input_ids = batch['input_ids'].to(device)
+			mask = batch['attention_mask'].to(device)
 			label = batch['label'].to(device)
 
 			optimizer.zero_grad()
@@ -171,10 +216,34 @@ for epoch in range(NUM_EPOCHS):
 			running_total += len(label)
 
 			running_loss += loss.item()
-			pbar.set_postfix(acc=f'{running_correct/running_total:.4f}', loss=f'{running_loss/len(train_dataloader):.4f}')
-			pbar.update(1)
+			_, pred = outputs.topk(1, dim=1)
+			running_acc += accuracy_score(label.cpu(), pred.cpu().flatten())
+			pbar.set_postfix(loss=f'{running_loss/((i+1)):.4f}',
+					accuracy=f'{running_acc/((i+1)):.4f}')
+			pbar.update()
+		
+		losses.append(running_loss/len(train_dataloader))
+		accuracy.append(running_acc/len(train_dataloader))
 	
 	#print(f'\r {running_loss/len(dataloader)}', end='', flush=True)
 
 print('\nFinished Training')
+
+
+# In[ ]:
+
+
+len(train_dataloader)
+
+
+# In[ ]:
+
+
+running_loss
+
+
+# In[ ]:
+
+
+
 

@@ -7,3 +7,4 @@ Sentiment analysis on yelp dataset.
 
 ### Causal Language Model
 CLM on wikipedia dataset.
+5 billion parameters
